@@ -57,6 +57,14 @@ import type {
 
 type EventHandler<T extends Event = Event> = (event: T) => void;
 
+/**
+ * WHATWG WebSocket `readyState` constants. Hard-coded so we never touch the
+ * global `WebSocket` at runtime — Node ≤ 21 doesn't expose it and would throw
+ * `ReferenceError: WebSocket is not defined` even on a successful injection
+ * path (e.g. `socket.readyState === WebSocket.OPEN`).
+ */
+const WS_OPEN = 1;
+
 interface PendingRequest {
   resolve: (value: BaseResponseOk) => void;
   reject: (error: Error) => void;
@@ -160,7 +168,7 @@ export class HuaGaoClient {
   /** Open a WebSocket connection. No-op if already connected. */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      if (this.socket && this.socket.readyState === WS_OPEN) {
         resolve();
         return;
       }
@@ -204,7 +212,7 @@ export class HuaGaoClient {
 
   /** Whether the underlying WebSocket is in OPEN state. */
   get isConnected(): boolean {
-    return this.socket?.readyState === WebSocket.OPEN;
+    return this.socket?.readyState === WS_OPEN;
   }
 
   // ============================================================
@@ -297,7 +305,7 @@ export class HuaGaoClient {
     params: Omit<Request & { func: T }, 'func' | 'iden'>,
   ): Promise<FuncResponseMap[T]> {
     return new Promise((resolve, reject) => {
-      if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      if (!this.socket || this.socket.readyState !== WS_OPEN) {
         reject(new Error('Not connected'));
         return;
       }
