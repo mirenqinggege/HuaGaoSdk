@@ -70,9 +70,14 @@ export interface HuaGaoClientOptions {
   /** Timeout for each request in ms (default 30000) */
   timeout?: number;
   /**
-   * Provide a WebSocket instance directly (e.g. using the `ws` package in Node.js).
-   * When given, `url` is ignored and the caller is responsible for the lifecycle
-   * (opening, closing) of the socket.
+   * Provide a WebSocket instance directly. **Required on Node.js ≤ 21**
+   * (Node 16/18/20 do not expose a global `WebSocket`); typically use the
+   * `ws` package: `import WebSocket from 'ws'`.
+   *
+   * When given, `url` is ignored. The caller owns the socket lifecycle:
+   * open it before passing in, close it yourself when done. `connect()`
+   * becomes a no-op (and rejects if the socket isn't open yet);
+   * `disconnect()` will NOT close it.
    */
   socket?: WebSocket;
   /**
@@ -88,17 +93,38 @@ export interface HuaGaoClientOptions {
  * Communicates with the HuaGao document-scanning/image-processing backend
  * over a WebSocket connection using JSON messages.
  *
+ * ## Usage
+ *
+ * **Browser, or Node.js ≥ 22 (global `WebSocket` available):**
  * ```ts
- * // Browser or Node.js with global WebSocket:
  * const client = new HuaGaoClient({ url: 'ws://127.0.0.1:38999' });
  * await client.connect();
  * await client.setGlobalConfig({ image_format: 'jpg' });
- *
- * // Node.js with the `ws` package:
- * import WebSocket from 'ws';
- * const ws = new WebSocket('ws://127.0.0.1:38999');
- * const client = new HuaGaoClient({ socket: ws });
  * ```
+ *
+ * **Node.js ≤ 21 (including Node 16/18/20 — no global `WebSocket`):**
+ *
+ * Install the `ws` package and inject the socket. The SDK will NOT call
+ * `new WebSocket(...)` internally in this mode, so the missing global is
+ * irrelevant. You own the socket lifecycle (wait for `open`, call `close`).
+ *
+ * ```ts
+ * import WebSocket from 'ws';                   // pnpm add ws && pnpm add -D @types/ws
+ * const ws = new WebSocket('ws://127.0.0.1:38999');
+ * await new Promise<void>((resolve, reject) => {
+ *   ws.once('open', () => resolve());
+ *   ws.once('error', reject);
+ * });
+ * // Cast: `ws` package's WebSocket is structurally compatible enough for our use.
+ * const client = new HuaGaoClient({ socket: ws as unknown as WebSocket });
+ * await client.setGlobalConfig({ image_format: 'jpg' });
+ * // When done:
+ * ws.close();
+ * ```
+ *
+ * Note: with an externally-provided socket, `client.connect()` is a no-op
+ * (it rejects if the socket isn't already open) and `client.disconnect()`
+ * will NOT close the underlying socket — you must close it yourself.
  */
 export class HuaGaoClient {
   private socket: WebSocket | null = null;
